@@ -1,0 +1,497 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>APS3e™</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      overflow-x: hidden;
+      background: linear-gradient(180deg, #003087 0%, #001f5f 100%);
+      color: white;
+      font-family: 'Rubik', sans-serif;
+      overscroll-behavior-x: none;
+      overscroll-behavior-y: contain;
+      scroll-behavior: smooth;
+      min-height: 100vh;
+    }
+    canvas#starfield {
+      position: fixed;
+      top: 0;
+      left: 0;
+      z-index: -1;
+      width: 100vw;
+      height: 100vh;
+      display: block;
+    }
+    .glow {
+      transition: all 0.3s ease;
+      box-shadow: 0 0 10px rgba(0, 123, 255, 0.5);
+    }
+    .glow:hover {
+      box-shadow: 0 0 20px rgba(0, 123, 255, 0.8);
+      transform: scale(1.05);
+    }
+    .nav-item {
+      transition: all 0.3s ease;
+    }
+    .nav-item:hover {
+      background-color: rgba(255, 255, 255, 0.1);
+      transform: translateX(10px);
+    }
+    .section {
+      padding: 1rem;
+      margin-bottom: 1rem;
+      max-width: 1200px;
+      margin-left: auto;
+      margin-right: auto;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    h1, h2, h3 {
+      font-family: 'Rubik', sans-serif;
+      font-weight: 700;
+    }
+    p, .text-sm {
+      font-family: 'Rubik', sans-serif;
+      font-weight: 400;
+    }
+    .shine {
+      animation: shine 2s infinite;
+      display: inline-block;
+    }
+    @keyframes shine {
+      0% {
+        text-shadow: 0 0 5px rgba(0, 123, 255, 0.5), 0 0 10px rgba(0, 123, 255, 0.3);
+      }
+      50% {
+        text-shadow: 0 0 20px rgba(0, 123, 255, 1), 0 0 30px rgba(0, 123, 255, 0.8);
+      }
+      100% {
+        text-shadow: 0 0 5px rgba(0, 123, 255, 0.5), 0 0 10px rgba(0, 123, 255, 0.3);
+      }
+    }
+    .video-container {
+      position: relative;
+      padding-bottom: 56.25%;
+      height: 0;
+      overflow: hidden;
+      margin-bottom: 1rem;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    .video-container iframe {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      border: 0;
+    }
+    .logo {
+      width: 100px;
+      height: auto;
+      animation: logo-shine 3s infinite;
+    }
+    @keyframes logo-shine {
+      0% { filter: brightness(1); }
+      50% { filter: brightness(1.5); }
+      100% { filter: brightness(1); }
+    }
+    .modal {
+      display: none; /* Hidden by default */
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.7);
+      z-index: 1000;
+      overscroll-behavior-x: none;
+      justify-content: center;
+      align-items: center;
+    }
+    .modal-content {
+      background: linear-gradient(145deg, #003087 0%, #1e3a8a 100%);
+      padding: 30px;
+      border-radius: 15px;
+      width: 90%;
+      max-width: 600px;
+      text-align: center;
+      color: white;
+      box-sizing: border-box;
+      box-shadow: 0 0 20px rgba(255, 69, 0, 0.8); /* Orange for warning feel */
+      animation: fade-in-scale 0.3s ease-out, pulse-glow 1.5s infinite;
+      position: relative;
+      transform-origin: center;
+    }
+    @keyframes fade-in-scale {
+      from {
+        opacity: 0;
+        transform: scale(0.9);
+      }
+      to {
+        opacity: 1;
+        transform: scale(1);
+      }
+    }
+    @keyframes pulse-glow {
+      0% {
+        box-shadow: 0 0 10px rgba(255, 69, 0, 0.6), 0 0 20px rgba(255, 69, 0, 0.4);
+      }
+      50% {
+        box-shadow: 0 0 20px rgba(255, 69, 0, 0.9), 0 0 30px rgba(255, 69, 0, 0.6);
+      }
+      100% {
+        box-shadow: 0 0 10px rgba(255, 69, 0, 0.6), 0 0 20px rgba(255, 69, 0, 0.4);
+      }
+    }
+    .modal-content h3 {
+      font-size: 2rem;
+      margin-bottom: 1rem;
+      text-shadow: 0 0 10px rgba(255, 69, 0, 0.8); /* Orange text shadow */
+    }
+    .modal-content p {
+      font-size: 1.2rem;
+      margin-bottom: 1.5rem;
+    }
+    .modal-content button {
+      background-color: #00C4FF;
+      color: white;
+      padding: 12px 30px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 1.1rem;
+      font-weight: 700;
+      transition: background-color 0.3s ease;
+    }
+    .modal-content button:hover {
+      background-color: #00a3d9;
+    }
+    header {
+      width: 100%;
+      box-sizing: border-box;
+    }
+    nav {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+    .nav-item {
+      white-space: nowrap;
+    }
+    .download-button-container {
+      text-align: center;
+      padding: 2rem 0;
+    }
+    .download-btn {
+      background-color: #00C4FF;
+      color: white;
+      padding: 15px 40px; /* Increased padding for larger size */
+      border-radius: 5px;
+      font-family: 'Rubik', sans-serif;
+      font-size: 1.3rem; /* Increased font size for larger appearance */
+      font-weight: 700; /* Thicker font weight */
+      text-decoration: none;
+      display: inline-block;
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+      transition: transform 0.2s ease, background-color 0.3s ease;
+    }
+    .download-btn:hover {
+      background-color: #00a3d9;
+      transform: scale(1.1);
+    }
+  </style>
+</head>
+<body>
+  <canvas id="starfield"></canvas>
+  <header class="py-4 px-6 flex justify-between items-center">
+    <svg class="logo" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+      <g transform="translate(50, 50)">
+        <path d="M -30 -20 L -30 20 L 0 40 L 30 20 L 30 -20 L 0 -40 Z" fill="#003087" />
+        <path d="M 0 -40 A 30 30 0 0 1 0 40" fill="#00C4FF" />
+        <path d="M 0 -30 A 20 20 0 0 1 0 30" fill="#FF4500" />
+        <text x="-20" y="10" font-family="Rubik" font-size="20" font-weight="700" fill="white">APS3e™</text>
+      </g>
+    </svg>
+    <nav class="flex space-x-4">
+      <a href="#home" class="nav-item px-4 py-2 rounded-lg text-lg">Home</a>
+      <a href="#features" class="nav-item px-4 py-2 rounded-lg text-lg">Features</a>
+      <a href="#faq" class="nav-item px-4 py-2 rounded-lg text-lg">FAQ</a>
+      <a href="#get-now" class="nav-item px-4 py-2 rounded-lg text-lg">Download</a>
+      <a href="#videos" class="nav-item px-4 py-2 rounded-lg text-lg">Videos</a>
+    </nav>
+  </header>
+  <main>
+    <section id="home" class="section text-center">
+      <h2 class="text-4xl font-bold mb-6">Welcome to APS3e™</h2>
+      <p class="text-lg mb-6">Experience PlayStation 3 gaming on your Android device with APS3e™, the open-source emulator designed for seamless performance and high compatibility. Relive classic PS3 titles like <em>GTA V</em>, <em>The Last of Us</em>, and <em>God of War</em> right on your phone or tablet, without needing a console or PC streaming. APS3e™ brings console-quality gaming to your pocket with a user-friendly interface and regular updates driven by community feedback.</p>
+    </section>
+    <div class="download-button-container">
+      <a href="#" id="download-btn" class="download-btn">Download Now</a>
+    </div>
+    <section id="features" class="section">
+      <h2 class="text-3xl font-bold mb-6">Features</h2>
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div class="glow bg-gray-800 p-6 rounded-lg">
+          <h3 class="text-xl font-bold mb-2">Native Android Emulation</h3>
+          <p>Run PS3 games directly on your Android device without PC streaming. APS3e™ uses advanced LLVM technology to compile PS3 code into aarch64 instructions, ensuring efficient performance tailored for mobile hardware.</p>
+        </div>
+        <div class="glow bg-gray-800 p-6 rounded-lg">
+          <h3 class="text-xl font-bold mb-2">High Compatibility</h3>
+          <p>Supports up to 80% of the PS3 game catalog with optimized performance. Lightweight titles like <em>Terraria</em>, <em>Limbo</em>, and <em>Rayman Origins</em> run smoothly, with ongoing updates to improve compatibility for more demanding games.</p>
+        </div>
+        <div class="glow bg-gray-800 p-6 rounded-lg">
+          <h3 class="text-xl font-bold mb-2">Controller Support</h3>
+          <p>Seamless integration with Bluetooth controllers for a console-like experience. Customize controls to match your playstyle, with plans for enhanced touchscreen support in future releases.</p>
+        </div>
+        <div class="glow bg-gray-800 p-6 rounded-lg">
+          <h3 class="text-xl font-bold mb-2">Customizable Graphics</h3>
+          <p>Adjust resolution, texture quality, and frame rate settings to optimize performance for your device. Vulkan API support ensures high-quality graphics with minimal lag on supported hardware.</p>
+        </div>
+        <div class="glow bg-gray-800 p-6 rounded-lg">
+          <h3 class="text-xl font-bold mb-2">Community-Driven Updates</h3>
+          <p>APS3e™ is actively developed with input from the emulation community. Regular updates address bugs, improve performance, and expand game compatibility based on user feedback.</p>
+        </div>
+      </div>
+    </section>
+    <section id="faq" class="section">
+      <h2 class="text-3xl font-bold mb-6">Frequently Asked Questions</h2>
+      <div class="space-y-6">
+        <div class="glow bg-gray-800 p-6 rounded-lg">
+          <h3 class="text-xl font-bold mb-2">Is APS3e™ free to use?</h3>
+          <p>Yes, APS3e™ is completely free with no subscriptions or paywalls. It’s an open-source project, though users must provide their own legal PS3 game files and firmware.</p>
+        </div>
+        <div class="glow bg-gray-800 p-6 rounded-lg">
+          <h3 class="text-xl font-bold mb-2">What are the system requirements?</h3>
+          <p>APS3e™ requires Android 8 or higher, arm64 architecture, and Vulkan API support. For optimal performance, use a device with at least 8GB RAM and a Snapdragon 8 Gen 1+ processor or equivalent.</p>
+        </div>
+        <div class="glow bg-gray-800 p-6 rounded-lg">
+          <h3 class="text-xl font-bold mb-2">How do I get started with APS3e™?</h3>
+          <p>Download the APK from the Download section below, install the PS3 firmware via the emulator’s settings, and load your legally owned game files (ISO or PKG). Check the video tutorials for detailed setup guides.</p>
+        </div>
+        <div class="glow bg-gray-800 p-6 rounded-lg">
+          <h3 class="text-xl font-bold mb-2">Does APS3e™ support all PS3 games?</h3>
+          <p>Not yet. Lightweight games like <em>Limbo</em> and <em>Terraria</em> work well, while heavier titles may experience glitches. The team is actively improving compatibility.</p>
+        </div>
+      </div>
+    </section>
+    <section id="get-now" class="section text-center">
+      <h2 class="text-3xl font-bold mb-6">Get APS3e™ Now</h2>
+      <p class="text-lg mb-6">Ready to play PS3 games on your Android device? Download APS3e™ now and start gaming!</p>
+    </section>
+    <section id="videos" class="section">
+      <h2 class="text-3xl font-bold mb-6">Video Tutorials</h2>
+      <p class="text-lg mb-6">Watch these videos to learn how to set up and use the APS3e™ Emulator, troubleshoot common issues, and optimize your gaming experience.</p>
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div class="glow bg-gray-800 p-6 rounded-lg">
+          <h3 class="text-xl font-bold mb-2">New PS3 Emulator for Android: Meet APS3e™!</h3>
+          <div class="video-container">
+            <iframe src="https://www.youtube.com/embed/NLNaTZgBRE0" title="New PS3 Emulator for Android: Meet APS3e™!" allowfullscreen></iframe>
+          </div>
+          <p class="text-sm">An overview of the APS3e™ Emulator, its features, and initial impressions. Perfect for understanding what APS3e™ can do. (Published: Feb 17, 2025)</p>
+        </div>
+        <div class="glow bg-gray-800 p-6 rounded-lg">
+          <h3 class="text-xl font-bold mb-2">Major Updates in PS3 Emulation on Android</h3>
+          <div class="video-container">
+            <iframe src="https://www.youtube.com/embed/06Glic09orw" title="Major Updates in PS3 Emulation on Android" allowfullscreen></iframe>
+          </div>
+          <p class="text-sm">Covers recent updates to APS3e™ and comparisons with other emulation solutions. (Published: May 4, 2025)</p>
+        </div>
+        <div class="glow bg-gray-800 p-6 rounded-lg">
+          <h3 class="text-xl font-bold mb-2">Testing APS3e™ Emulator on Android</h3>
+          <div class="video-container">
+            <iframe src="https://www.youtube.com/embed/VIDEO_ID" title="Testing APS3e™ Emulator on Android" allowfullscreen></iframe>
+          </div>
+          <p class="text-sm">A hands-on demonstration of setting up and playing games on APS3e™. (Note: Placeholder video; replace with a relevant APS3e™ tutorial if available.)</p>
+        </div>
+      </div>
+    </section>
+  </main>
+  <footer class="py-4 px-6 text-center bg-gray-900">
+    <p>© 2025 APS3e™ Emulator. All rights reserved.</p>
+    <p>Contact: <a href="mailto:support@aps3e.dev" class="underline">support@aps3e.dev</a></p>
+  </footer>
+  <div id="modal" class="modal">
+    <div class="modal-content">
+      <h3 class="text-3xl font-bold mb-4">Complete a Mission to Download</h3>
+      <p class="text-lg mb-2">You must complete a mission to download APS3e™.</p>
+      <button id="continue-btn" class="glow">Continue to Finish the Mission</button>
+    </div>
+  </div>
+  <script>
+    // Starfield initialization with PS4 theme style
+    document.addEventListener('DOMContentLoaded', () => {
+      const canvas = document.getElementById('starfield');
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        console.error('Canvas context not supported');
+        return;
+      }
+
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+
+      const stars = [];
+      const numStars = 800;
+
+      class Star {
+        constructor() {
+          this.reset();
+          this.fadeDirection = Math.random() > 0.5 ? 1 : -1;
+          this.fadeSpeed = Math.random() * 0.02 + 0.01;
+        }
+        reset() {
+          this.x = Math.random() * canvas.width;
+          this.y = Math.random() * canvas.height;
+          this.speedX = (Math.random() * 1 - 0.5) * 0.5;
+          this.speedY = (Math.random() * 1 - 0.5) * 0.5;
+          this.size = Math.random() * 2 + 0.5;
+          this.opacity = Math.random() * 0.5 + 0.3;
+          this.maxOpacity = this.opacity + 0.3;
+          this.minOpacity = this.opacity - 0.3;
+        }
+        update() {
+          this.x += this.speedX;
+          this.y += this.speedY;
+
+          this.opacity += this.fadeSpeed * this.fadeDirection;
+          if (this.opacity >= this.maxOpacity || this.opacity <= this.minOpacity) {
+            this.fadeDirection *= -1;
+            this.opacity = Math.max(this.minOpacity, Math.min(this.maxOpacity, this.opacity));
+          }
+
+          if (this.x < 0 || this.x > canvas.width || this.y < 0 || this.y > canvas.height) {
+            this.reset();
+          }
+        }
+        draw() {
+          const gradient = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.size * 2);
+          gradient.addColorStop(0, `rgba(255, 255, 255, ${this.opacity})`);
+          gradient.addColorStop(1, `rgba(255, 255, 255, 0)`);
+
+          ctx.beginPath();
+          ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+          ctx.fillStyle = gradient;
+          ctx.fill();
+        }
+      }
+
+      for (let i = 0; i < numStars; i++) {
+        stars.push(new Star());
+      }
+
+      function animate() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        for (const star of stars) {
+          star.update();
+          star.draw();
+        }
+        requestAnimationFrame(animate);
+      }
+
+      window.addEventListener('resize', () => {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        for (const star of stars) {
+          star.reset();
+        }
+      });
+
+      animate();
+    });
+
+    // Modal functionality
+    const modal = document.getElementById('modal');
+    const downloadBtn = document.getElementById('download-btn');
+    const continueBtn = document.getElementById('continue-btn');
+
+    downloadBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      modal.style.display = 'flex'; // Show modal with animation
+      // Reset animation by adding/removing a class to trigger it
+      modal.classList.remove('fade-in-scale');
+      void modal.offsetWidth; // Trigger reflow
+      modal.classList.add('fade-in-scale');
+    });
+
+    continueBtn.addEventListener('click', () => {
+      window.location.href = 'https://appinstallcheck.com/cl/i/6d6j4j'; // Redirect to the provided URL
+    });
+
+    window.addEventListener('click', (e) => {
+      if (e.target === modal) {
+        modal.style.display = 'none'; // Hide modal when clicking outside
+      }
+    });
+
+    // Prevent horizontal swipe/scroll without breaking canvas
+    document.addEventListener('touchmove', (e) => {
+      const touch = e.touches[0];
+      const target = e.target;
+      if (target.tagName.toLowerCase() === 'canvas') {
+        return;
+      }
+      const startX = touch.clientX;
+      const startY = touch.clientY;
+      const diffX = startX - (touch.startX || startX);
+      if (Math.abs(diffX) > 0) {
+        e.preventDefault();
+      }
+      touch.startX = startX;
+      touch.startY = startY;
+    }, { passive: false });
+
+    document.addEventListener('touchstart', (e) => {
+      const touch = e.touches[0];
+      touch.startX = touch.clientX;
+      touch.startY = touch.clientY;
+    });
+  </script>
+</body>
+</html>
